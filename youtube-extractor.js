@@ -303,7 +303,8 @@ async function extractVideo(input) {
         console.log(`Author:       ${videoDetails.author}`);
         console.log(`Channel ID:   ${videoDetails.channelId}`);
         console.log(`Duration:     ${formatDuration(videoDetails.lengthSeconds * 1000)}`);
-        // Format view count with locale string, converting to number for formatting but preserving large values
+        // Format view count with locale string. Note: For extremely large numbers (>9 quadrillion),
+        // precision may be lost due to JavaScript's Number limitations, but this is extremely rare.
         console.log(`View Count:   ${videoDetails.viewCount ? Number(videoDetails.viewCount).toLocaleString() : 'N/A'}`);
         console.log(`Rating:       ${videoDetails.averageRating || 'N/A'}`);
         console.log(`Is Live:      ${videoDetails.isLiveContent ? 'Yes' : 'No'}`);
