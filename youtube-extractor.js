@@ -105,6 +105,25 @@ function httpsRequest(url, options = {}) {
 }
 
 /**
+ * Extract JSON string using balanced brace matching
+ */
+function extractBalancedJson(jsonStr) {
+    let braceCount = 0;
+    let endIndex = 0;
+    
+    for (let i = 0; i < jsonStr.length; i++) {
+        if (jsonStr[i] === '{') braceCount++;
+        if (jsonStr[i] === '}') braceCount--;
+        if (braceCount === 0) {
+            endIndex = i + 1;
+            break;
+        }
+    }
+    
+    return endIndex > 0 ? jsonStr.substring(0, endIndex) : jsonStr;
+}
+
+/**
  * Extract JSON from JavaScript variable assignment in HTML
  * Uses a more robust approach to handle nested objects with braces
  */
@@ -118,23 +137,7 @@ function extractJsonFromHtml(html, variableName) {
     for (const pattern of patterns) {
         const match = html.match(pattern);
         if (match && match[1]) {
-            // Try to parse the JSON by finding balanced braces
-            let jsonStr = match[1].trim();
-            let braceCount = 0;
-            let endIndex = 0;
-            
-            for (let i = 0; i < jsonStr.length; i++) {
-                if (jsonStr[i] === '{') braceCount++;
-                if (jsonStr[i] === '}') braceCount--;
-                if (braceCount === 0) {
-                    endIndex = i + 1;
-                    break;
-                }
-            }
-            
-            if (endIndex > 0) {
-                jsonStr = jsonStr.substring(0, endIndex);
-            }
+            const jsonStr = extractBalancedJson(match[1].trim());
             
             try {
                 return JSON.parse(jsonStr);
@@ -174,27 +177,11 @@ async function fetchVideoInfo(videoId) {
         // Try alternative extraction method with balanced brace matching
         const match = html.match(/ytInitialPlayerResponse\s*=\s*({[^;]+);/s);
         if (match && match[1]) {
-            let jsonStr = match[1];
-            let braceCount = 0;
-            let endIndex = 0;
-            
-            // Find balanced braces
-            for (let i = 0; i < jsonStr.length; i++) {
-                if (jsonStr[i] === '{') braceCount++;
-                if (jsonStr[i] === '}') braceCount--;
-                if (braceCount === 0) {
-                    endIndex = i + 1;
-                    break;
-                }
-            }
-            
-            if (endIndex > 0) {
-                jsonStr = jsonStr.substring(0, endIndex);
-                try {
-                    playerResponse = JSON.parse(jsonStr);
-                } catch (e) {
-                    throw new Error('Failed to parse player response from page');
-                }
+            const jsonStr = extractBalancedJson(match[1]);
+            try {
+                playerResponse = JSON.parse(jsonStr);
+            } catch (e) {
+                throw new Error('Failed to parse player response from page');
             }
         }
     }
@@ -260,8 +247,8 @@ function parseFormats(streamingData) {
  */
 function formatFileSize(bytes) {
     if (!bytes) return 'N/A';
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
     return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
 }
 
@@ -375,7 +362,7 @@ async function extractVideo(input) {
                 console.log(`\nFormat ID: ${format.itag}`);
                 console.log(`  Quality:     ${format.audioQuality}`);
                 console.log(`  Type:        ${format.mimeType}`);
-                console.log(`  Sample Rate: ${format.audioSampleRate} Hz`);
+                console.log(`  Sample Rate: ${format.audioSampleRate ? format.audioSampleRate + ' Hz' : 'N/A'}`);
                 console.log(`  Channels:    ${format.audioChannels || 'N/A'}`);
                 console.log(`  Bitrate:     ${formatBitrate(format.bitrate)}`);
                 console.log(`  Size:        ${formatFileSize(format.contentLength)}`);
