@@ -160,8 +160,8 @@ async function fetchVideoInfo(videoId) {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
-            // Note: Node.js http(s) module doesn't automatically decompress, but YouTube typically 
-            // returns uncompressed responses when compression isn't explicitly handled
+            // Not requesting compression as Node.js http(s) doesn't auto-decompress.
+            // YouTube typically returns uncompressed HTML anyway when not explicitly requested.
         }
     });
 
@@ -171,13 +171,30 @@ async function fetchVideoInfo(videoId) {
     let playerResponse = extractJsonFromHtml(html, 'ytInitialPlayerResponse');
     
     if (!playerResponse) {
-        // Try alternative extraction method
-        const match = html.match(/ytInitialPlayerResponse\s*=\s*({.+?})\s*;/s);
+        // Try alternative extraction method with balanced brace matching
+        const match = html.match(/ytInitialPlayerResponse\s*=\s*({[^;]+);/s);
         if (match && match[1]) {
-            try {
-                playerResponse = JSON.parse(match[1]);
-            } catch (e) {
-                throw new Error('Failed to parse player response from page');
+            let jsonStr = match[1];
+            let braceCount = 0;
+            let endIndex = 0;
+            
+            // Find balanced braces
+            for (let i = 0; i < jsonStr.length; i++) {
+                if (jsonStr[i] === '{') braceCount++;
+                if (jsonStr[i] === '}') braceCount--;
+                if (braceCount === 0) {
+                    endIndex = i + 1;
+                    break;
+                }
+            }
+            
+            if (endIndex > 0) {
+                jsonStr = jsonStr.substring(0, endIndex);
+                try {
+                    playerResponse = JSON.parse(jsonStr);
+                } catch (e) {
+                    throw new Error('Failed to parse player response from page');
+                }
             }
         }
     }
@@ -249,6 +266,14 @@ function formatFileSize(bytes) {
 }
 
 /**
+ * Format bitrate from bps to kbps
+ */
+function formatBitrate(bitrate) {
+    if (!bitrate) return 'N/A';
+    return `${(bitrate / 1000).toFixed(0)} kbps`;
+}
+
+/**
  * Format duration
  */
 function formatDuration(ms) {
@@ -291,8 +316,8 @@ async function extractVideo(input) {
         console.log(`Author:       ${videoDetails.author}`);
         console.log(`Channel ID:   ${videoDetails.channelId}`);
         console.log(`Duration:     ${formatDuration(videoDetails.lengthSeconds * 1000)}`);
-        // Keep view count as string to avoid precision loss with large numbers
-        console.log(`View Count:   ${videoDetails.viewCount ? parseInt(videoDetails.viewCount).toLocaleString() : 'N/A'}`);
+        // Format view count with locale string, converting to number for formatting but preserving large values
+        console.log(`View Count:   ${videoDetails.viewCount ? Number(videoDetails.viewCount).toLocaleString() : 'N/A'}`);
         console.log(`Rating:       ${videoDetails.averageRating || 'N/A'}`);
         console.log(`Is Live:      ${videoDetails.isLiveContent ? 'Yes' : 'No'}`);
         // Safely handle shortDescription which may be undefined or null
@@ -323,7 +348,7 @@ async function extractVideo(input) {
                 console.log(`  Type:        ${format.mimeType}`);
                 console.log(`  Resolution:  ${format.width}x${format.height}`);
                 console.log(`  FPS:         ${format.fps || 'N/A'}`);
-                console.log(`  Bitrate:     ${(format.bitrate / 1000).toFixed(0)} kbps`);
+                console.log(`  Bitrate:     ${formatBitrate(format.bitrate)}`);
                 console.log(`  Size:        ${formatFileSize(format.contentLength)}`);
                 if (format.url) {
                     console.log(`  URL:         ${format.url.substring(0, 100)}...`);
@@ -339,7 +364,7 @@ async function extractVideo(input) {
                 console.log(`  Type:        ${format.mimeType}`);
                 console.log(`  Resolution:  ${format.width}x${format.height}`);
                 console.log(`  FPS:         ${format.fps || 'N/A'}`);
-                console.log(`  Bitrate:     ${(format.bitrate / 1000).toFixed(0)} kbps`);
+                console.log(`  Bitrate:     ${formatBitrate(format.bitrate)}`);
                 console.log(`  Size:        ${formatFileSize(format.contentLength)}`);
             });
         }
@@ -352,7 +377,7 @@ async function extractVideo(input) {
                 console.log(`  Type:        ${format.mimeType}`);
                 console.log(`  Sample Rate: ${format.audioSampleRate} Hz`);
                 console.log(`  Channels:    ${format.audioChannels || 'N/A'}`);
-                console.log(`  Bitrate:     ${(format.bitrate / 1000).toFixed(0)} kbps`);
+                console.log(`  Bitrate:     ${formatBitrate(format.bitrate)}`);
                 console.log(`  Size:        ${formatFileSize(format.contentLength)}`);
             });
         }
