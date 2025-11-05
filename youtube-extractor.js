@@ -193,24 +193,33 @@ function parseFormats(streamingData) {
         formats.push(...streamingData.adaptiveFormats);
     }
 
-    return formats.map(format => ({
-        itag: format.itag,
-        url: format.url,
-        mimeType: format.mimeType,
-        bitrate: format.bitrate,
-        width: format.width,
-        height: format.height,
-        fps: format.fps,
-        quality: format.quality,
-        qualityLabel: format.qualityLabel,
-        audioQuality: format.audioQuality,
-        audioSampleRate: format.audioSampleRate,
-        audioChannels: format.audioChannels,
-        contentLength: format.contentLength,
-        approxDurationMs: format.approxDurationMs,
-        hasVideo: format.mimeType?.includes('video'),
-        hasAudio: format.mimeType?.includes('audio'),
-    }));
+    return formats.map(format => {
+        const mimeType = format.mimeType || '';
+        const hasVideo = mimeType.includes('video');
+        // Audio is present if mimeType includes 'audio' OR if there are audio codecs (mp4a, opus, vorbis, etc.)
+        const hasAudio = mimeType.includes('audio') || 
+                         /mp4a|opus|vorbis|aac/i.test(mimeType) ||
+                         format.audioQuality !== undefined;
+        
+        return {
+            itag: format.itag,
+            url: format.url,
+            mimeType: format.mimeType,
+            bitrate: format.bitrate,
+            width: format.width,
+            height: format.height,
+            fps: format.fps,
+            quality: format.quality,
+            qualityLabel: format.qualityLabel,
+            audioQuality: format.audioQuality,
+            audioSampleRate: format.audioSampleRate,
+            audioChannels: format.audioChannels,
+            contentLength: format.contentLength,
+            approxDurationMs: format.approxDurationMs,
+            hasVideo: hasVideo,
+            hasAudio: hasAudio,
+        };
+    });
 }
 
 /**
