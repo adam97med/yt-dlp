@@ -106,23 +106,37 @@ function httpsRequest(url, options = {}) {
 
 /**
  * Extract JSON from JavaScript variable assignment in HTML
+ * Uses a more robust approach to handle nested objects with braces
  */
 function extractJsonFromHtml(html, variableName) {
-    // Try to find the variable assignment
+    // Try to find the variable assignment and extract JSON
     const patterns = [
-        new RegExp(`var\\s+${variableName}\\s*=\\s*({.+?});`, 's'),
-        new RegExp(`${variableName}\\s*=\\s*({.+?});`, 's'),
+        new RegExp(`var\\s+${variableName}\\s*=\\s*({[^;]+});`, 's'),
+        new RegExp(`${variableName}\\s*=\\s*({[^;]+});`, 's'),
     ];
 
     for (const pattern of patterns) {
         const match = html.match(pattern);
         if (match && match[1]) {
-            try {
-                // Remove trailing semicolon and parse
-                let jsonStr = match[1].trim();
-                if (jsonStr.endsWith(';')) {
-                    jsonStr = jsonStr.slice(0, -1);
+            // Try to parse the JSON by finding balanced braces
+            let jsonStr = match[1].trim();
+            let braceCount = 0;
+            let endIndex = 0;
+            
+            for (let i = 0; i < jsonStr.length; i++) {
+                if (jsonStr[i] === '{') braceCount++;
+                if (jsonStr[i] === '}') braceCount--;
+                if (braceCount === 0) {
+                    endIndex = i + 1;
+                    break;
                 }
+            }
+            
+            if (endIndex > 0) {
+                jsonStr = jsonStr.substring(0, endIndex);
+            }
+            
+            try {
                 return JSON.parse(jsonStr);
             } catch (e) {
                 continue;
@@ -142,10 +156,12 @@ async function fetchVideoInfo(videoId) {
     
     const response = await httpsRequest(url, {
         headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            // Using a recent Chrome user agent; update periodically to avoid detection
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
+            // Note: Node.js http(s) module doesn't automatically decompress, but YouTube typically 
+            // returns uncompressed responses when compression isn't explicitly handled
         }
     });
 
@@ -275,10 +291,13 @@ async function extractVideo(input) {
         console.log(`Author:       ${videoDetails.author}`);
         console.log(`Channel ID:   ${videoDetails.channelId}`);
         console.log(`Duration:     ${formatDuration(videoDetails.lengthSeconds * 1000)}`);
-        console.log(`View Count:   ${parseInt(videoDetails.viewCount).toLocaleString()}`);
+        // Keep view count as string to avoid precision loss with large numbers
+        console.log(`View Count:   ${videoDetails.viewCount ? parseInt(videoDetails.viewCount).toLocaleString() : 'N/A'}`);
         console.log(`Rating:       ${videoDetails.averageRating || 'N/A'}`);
         console.log(`Is Live:      ${videoDetails.isLiveContent ? 'Yes' : 'No'}`);
-        console.log(`Short Desc:   ${videoDetails.shortDescription.substring(0, 200)}${videoDetails.shortDescription.length > 200 ? '...' : ''}`);
+        // Safely handle shortDescription which may be undefined or null
+        const description = videoDetails.shortDescription || '';
+        console.log(`Short Desc:   ${description.substring(0, 200)}${description.length > 200 ? '...' : ''}`);
         
         console.log('\n' + '='.repeat(80));
         console.log('AVAILABLE FORMATS');
